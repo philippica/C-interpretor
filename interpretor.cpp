@@ -3,6 +3,7 @@
 #include <cstring>
 #include <set>
 #include <map>
+#include <fstream>
 #include <queue>
 #define maxn 10000
 using namespace std;
@@ -88,24 +89,59 @@ class instr
 {
 private:
 	vector <instruction> truple;
+	vector <instruction> truple2;
 	int Label;
+	int state;
 public:
 	void insertInstruction(string s);
+	void modify(int idx, string s);
 	void init();
+	void changeState();
 	int curLabel();
 	void print();
-	instr(){Label = 0;};
+	void reInsert();
+	instr(){Label = 0;state = 1;};
 }Instru;
+
+void instr::reInsert()
+{
+	int l = truple2.size();
+	for(int i = 0; i < l; i++)
+	{
+		insertInstruction(truple2[i].instru);
+	}
+	while(!truple2.empty())truple2.pop_back();
+}
+
+
+void instr::modify(int idx, string s)
+{
+	truple[idx].instru = s;
+}
 
 int instr::curLabel()
 {
 	return Label;
 }
 
+void instr::changeState()
+{
+	state ^= 1;
+}
+
+
 void instr::insertInstruction(string s)
 {
-	instruction u(Label++, s);
-	truple.push_back(u);
+	instruction u(Label, s);
+	if(state)
+	{
+		Label++;
+		truple.push_back(u);
+	}
+	else
+	{
+		truple2.push_back(u);
+	}
 }
 
 void instr::init()
@@ -240,7 +276,7 @@ int getNum(int cur)
 	return ret;
 }
 
-int pp=0;
+int pp=0,flagIdx = 0;
 Expr primaryExpr(int &cur)
 {
 	Expr ret;
@@ -253,7 +289,7 @@ Expr primaryExpr(int &cur)
 	{
 		ret.value = getNum(cur);
 		Instru.insertInstruction("MOV @"+intToStr(pp)+" "+intToStr(ret.value));
-		ret.adress = "@"+ intToStr(pp);
+		ret.adress = "@" + intToStr(pp);
 		pp++;
 		cur++;
 		return ret;
@@ -261,7 +297,7 @@ Expr primaryExpr(int &cur)
 	if(variable(cur))
 	{
 		cur++;
-		cout<<tokenStream[cur-1].identify<<endl;
+		ret.adress = tokenStream[cur-1].identify;
 		return ret;
 	}
 	int read = cur;
@@ -465,14 +501,14 @@ Expr additiveExpression(int &cur)
 		if(getToken(read, "+"))
 		{
 			Expr temp = multiplicativeExpression(read);
-			Instru.insertInstruction("add "+ret.adress+" "+temp.adress);
+			Instru.insertInstruction("ADD "+ret.adress+" "+temp.adress);
 			//ret.adress = "@"+ intToStr(pp);
 			ret.value += temp.value;
 		}
 		else if(getToken(read, "-"))
 		{
 			Expr temp = multiplicativeExpression(read);
-			Instru.insertInstruction("sub "+ret.adress+" "+temp.adress);
+			Instru.insertInstruction("SUB "+ret.adress+" "+temp.adress);
 			ret.value -= temp.value;
 		}
 		else break;
@@ -514,44 +550,56 @@ Expr relationalExpression(int &cur)
 		{
 			Expr temp = shiftExpression(read);
 			Instru.insertInstruction("CMP "+ret.adress+" "+temp.adress);
-			Instru.insertInstruction("JG "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JG FLAG"+ intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP FLAG"+ intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG"+intToStr(f2));
 			ret.value = (ret.value <= temp.value);
 		}
 		else if(getToken(read, ">="))
 		{
 			Expr temp = shiftExpression(read);
 			Instru.insertInstruction("CMP "+ret.adress+" "+temp.adress);
-			Instru.insertInstruction("JL "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JL FLAG"+ intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP FLAG"+ intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG"+intToStr(f2));
 			ret.value = (ret.value >= temp.value);
 		}
 		else if(getToken(read, ">"))
 		{
 			Expr temp = shiftExpression(read);
 			Instru.insertInstruction("CMP "+ret.adress+" "+temp.adress);
-			Instru.insertInstruction("JLE "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JLE FLAG"+ intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP FLAG"+ intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG"+intToStr(f2));
 			ret.value = (ret.value > temp.value);
 		}
 		else if(getToken(read, "<"))
 		{
 			Expr temp = shiftExpression(read);
 			Instru.insertInstruction("CMP "+ret.adress+" "+temp.adress);
-			Instru.insertInstruction("JGE "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JGE FLAG"+ intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP FLAG"+ intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG"+intToStr(f2));
 			ret.value = (ret.value < temp.value);
 		}
 		else break;
@@ -570,22 +618,28 @@ Expr equalityExpression(int &cur)
 		{
 			Expr temp = relationalExpression(read);
 			Instru.insertInstruction("CMP "+ret.adress+" "+temp.adress);
-			Instru.insertInstruction("JNE "+intToStr(Instru.curLabel() + 3));
+			Instru.insertInstruction("JNE FLAG"+ intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP "+intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG"+intToStr(f2));
 			ret.value = (ret.value == temp.value);
 		}
 		else if(getToken(read, "!="))
 		{
 			Expr temp = relationalExpression(read);
 			Instru.insertInstruction("CMP "+ret.adress+" "+temp.adress);
-			Instru.insertInstruction("JE "+intToStr(Instru.curLabel() + 3));
+			Instru.insertInstruction("JE FLAG"+ intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP "+intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG"+intToStr(f2));
 			ret.value = (ret.value != temp.value);
 		}
 		else break;
@@ -659,13 +713,16 @@ Expr logicAndExpression(int &cur)
 		{
 			Expr temp = OrExpression(read);
 			Instru.insertInstruction("TEST "+temp.adress+" "+temp.adress);
-			Instru.insertInstruction("JE "+intToStr(Instru.curLabel() + 5));
+			Instru.insertInstruction("JE FLAG"+intToStr(flagIdx));
 			Instru.insertInstruction("TEST "+ret.adress+" "+ret.adress);
-			Instru.insertInstruction("JE "+intToStr(Instru.curLabel() + 3));
+			Instru.insertInstruction("JE FLAG"+intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP FLAG"+intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG" + intToStr(f2));
 			ret.value = ret.value && temp.value;
 		}
 		else break;
@@ -685,13 +742,16 @@ Expr logicOrExpression(int &cur)
 		{
 			Expr temp = logicAndExpression(read);
 			Instru.insertInstruction("TEST "+temp.adress+" "+temp.adress);
-			Instru.insertInstruction("JNE "+intToStr(Instru.curLabel() + 5));
+			Instru.insertInstruction("JNE FLAG"+intToStr(flagIdx));
 			Instru.insertInstruction("TEST "+ret.adress+" "+ret.adress);
-			Instru.insertInstruction("JNE "+intToStr(Instru.curLabel() + 3));
+			Instru.insertInstruction("JNE FLAG"+intToStr(flagIdx));
+			int f1 = flagIdx++;
 			Instru.insertInstruction("MOV " + ret.adress + " 0x01");
-			Instru.insertInstruction("JMP "+intToStr(Instru.curLabel() + 2));
+			Instru.insertInstruction("JMP FLAG"+intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG"+intToStr(f1));
 			Instru.insertInstruction("MOV " + ret.adress + " 0x00");
-			Instru.insertInstruction("NOP");
+			Instru.insertInstruction("FLAG" + intToStr(f2));
 			ret.value = ret.value || temp.value;
 		}
 		else break;
@@ -737,24 +797,80 @@ Expr assignmentExpression(int &cur)
 	int tempp = pp;
 	instr u = Instru;
 	Expr ret = unaryExpression(read);
-	while(true)
+	if(getToken(read, "="))
 	{
-		if(getToken(read, "="))
-		{
-			recover = read;
-			u = Instru;
-			tempp = pp;
-			Expr temp = unaryExpression(read);
-		}
-		else
-		{
-			Instru = u;
-			read = recover;
-			pp = tempp;
-			ret = conditionalExpression(read);
-			break;
-		}
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("MOV " + ret.adress + " " + temp.adress);
+		ret = temp;
 	}
+	else if(getToken(read, "*="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("MUL " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "+="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("ADD " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "-="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("SUB " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "/="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("DIV " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "%="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("MOD " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "<<="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("SHL " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, ">>="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("SHR " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "&="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("AND " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "|="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("OR " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else if(getToken(read, "^="))
+	{
+		Expr temp = assignmentExpression(read);
+		Instru.insertInstruction("XOR " + ret.adress + " " + temp.adress);
+		ret = temp;
+	}
+	else
+	{
+		read = recover;
+		Instru = u;
+		pp = tempp;
+		ret = conditionalExpression(read);
+	}
+
 	cur = read;
 	return ret;
 }
@@ -773,18 +889,138 @@ Expr expression(int &cur)
 		}
 		else break;
 	}
+	if(read == cur)ret.error = false;
 	cur = read;
 	return ret;
+}
+
+Expr expressionStatement(int &cur)
+{
+	int read = cur;
+	Expr ret = expression(read);
+	if(!ret.error)
+	{
+		Expr temp = expression(read);
+		ret = temp;
+	}
+	getToken(read,";");
+	cur = read;
+	return ret;
+}
+
+Expr statement(int &cur);
+
+
+Expr block(int &cur)
+{
+	int read = cur;
+	Expr ret;
+	getToken(read, "{");
+	while(1)
+	{
+		if(getToken(read, "}"))break;
+		else
+		{
+			statement(read);
+		}
+	}
+	cur = read;
+	return ret;
+}
+
+
+
+Expr statement(int &cur)
+{
+	int read = cur;
+	Expr ret;
+	if(tokenStream[cur].identify == "{")
+	{
+		block(read);
+	}
+	else if(getToken(read,"if"))
+	{
+		getToken(read,"(");
+		Expr exp = expression(read);
+		getToken(read,")");
+
+		Instru.insertInstruction("TEST " + exp.adress + " " + exp.adress);
+		Instru.insertInstruction("JNE FLAG" + intToStr(flagIdx));
+		int f1 = flagIdx++;
+		statement(read);
+		if(getToken(read, "else"))
+		{
+			Instru.insertInstruction("JMP FLAG" + intToStr(flagIdx));
+			int f2 = flagIdx++;
+			Instru.insertInstruction("FLAG" + intToStr(f1));
+			statement(read);
+			Instru.insertInstruction("FLAG" + intToStr(f2));
+		}
+		else
+		{
+			Instru.insertInstruction("FLAG" + intToStr(f1));
+		}
+	}
+	else if(getToken(read,"for"))
+	{
+		getToken(read,"(");
+		Expr exp1 = expression(read);
+		getToken(read,";");
+		Instru.changeState();
+		Expr exp2 = expression(read);
+		getToken(read,";");
+		Expr exp3 = expression(read);
+		getToken(read,")");
+		Instru.changeState();
+		int mo = Instru.curLabel();
+		Instru.insertInstruction("JMP todo");
+		statement(read);
+		Instru.modify(mo, "JMP " + intToStr(Instru.curLabel()));
+		Instru.reInsert();
+	}
+	else
+	{
+		expressionStatement(read);
+	}
+	cur = read;
+	return ret;
+}
+
+
+void SCAN(string &str)
+{
+	str = "";
+	ifstream fin("b.in");
+	ofstream fout("b.out");
+	char ch;
+	while(fin>>ch)
+	str+=ch;
 }
 
 void initialization()
 {
 	pp = 0;
+	flagIdx = 0;
 }
 
 int main()
 {
 	string str;
+	Instru.init();
+	initialization();
+	SCAN(str);
+	//getline(cin, str);
+	lex(str);
+	for(int i = 0; i < (int)tokenStream.size(); i++)
+	{
+		cout<<tokenStream[i].identify<<endl;
+	}
+	Token temp("end", "end");
+	tokenStream.push_back(temp);
+	int u = 0;
+	Expr temp2 = statement(u);
+	Instru.print();
+	printf("%d\n",temp2.value);
 	while(1)
 	{
 		Instru.init();
@@ -798,10 +1034,9 @@ int main()
 		Token temp("end", "end");
 		tokenStream.push_back(temp);
 		int u = 0;
-		Expr temp2 = expression(u);
+		Expr temp2 = statement(u);
 		Instru.print();
 		printf("%d\n",temp2.value);
 	}
 	return 0;
 }
-
